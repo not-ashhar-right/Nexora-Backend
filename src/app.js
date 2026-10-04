@@ -21,10 +21,23 @@ app.use(
   })
 );
 
-// CORS
+// CORS Configuration
+const allowedOrigins = [
+  process.env.CORS_ORIGIN || "http://localhost:5173",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+];
+
 app.use(
   cors({
-    origin: "*",
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, or Postman)
+      if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== "production") {
+        return callback(null, true);
+      }
+      return callback(new Error("CORS policy violation"), false);
+    },
+    credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })

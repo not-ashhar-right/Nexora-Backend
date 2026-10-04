@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # B2B Merchant Network - Backend REST API
 
 A scalable, clean MVC Node.js / Express / MongoDB backend designed to integrate with the B2B Merchant Network frontend.
@@ -153,3 +154,6 @@ When the server is running, visit:
 - `PATCH /api/logistics/:id/status` - Update delivery status
 - `GET /api/recommendations/procurement` - AI-ready procurement recommendation rules
 - `GET /api/recommendations/resale` - AI-ready liquidation & resale suggestions
+=======
+# Nexora-Backend
+>>>>>>> 5f9dd9b0cff1d036a9895650660f9cf50bdfed31
