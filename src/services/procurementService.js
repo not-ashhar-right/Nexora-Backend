@@ -192,8 +192,24 @@ export const createSupplierOrder = async (adminUser, data) => {
   const totalAmount = Number(data.totalAmount || (orderQuantity * unitPrice));
 
   if (request) {
-    request.supplierId = data.supplierId;
-    request.supplierName = data.supplierName || "Supplier";
+    // Resolve supplierId: if the provided ID is a SupplierProduct ID, map to the actual supplier user ID
+    let resolvedSupplierId = data.supplierId;
+    let resolvedSupplierName = data.supplierName || "Supplier";
+    try {
+      const mongoose = (await import("mongoose")).default;
+      if (mongoose.isValidObjectId(data.supplierId)) {
+        const productMatch = await SupplierProduct.findById(data.supplierId);
+        if (productMatch) {
+          resolvedSupplierId = productMatch.supplierId;
+          resolvedSupplierName = data.supplierName || productMatch.supplierName || "Supplier";
+        }
+      }
+    } catch {
+      // Keep original supplierId if lookup fails
+    }
+
+    request.supplierId = resolvedSupplierId;
+    request.supplierName = resolvedSupplierName;
     request.quantity = orderQuantity;
     request.unitPrice = unitPrice;
     request.totalAmount = totalAmount;
@@ -208,8 +224,8 @@ export const createSupplierOrder = async (adminUser, data) => {
         orderType: "procurement",
         merchantId: request.merchantId,
         merchantName: request.merchantName,
-        supplierId: data.supplierId,
-        supplierName: data.supplierName,
+        supplierId: resolvedSupplierId,
+        supplierName: resolvedSupplierName,
         status: LOGISTICS_STATUS.ASSIGNED,
         destination: request.deliveryAddress?.city || "Destination Merchant Hub",
       });

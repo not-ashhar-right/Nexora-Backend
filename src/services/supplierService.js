@@ -105,9 +105,8 @@ export const deleteSupplierProduct = async (id, supplierId) => {
 };
 
 export const getSupplierOrders = async (supplierId, params = {}) => {
-  const query = {
-    $or: [{ supplierId }, { supplierName: { $exists: true, $ne: "" } }],
-  };
+  // Base query: only orders assigned to this specific supplier
+  const query = { supplierId };
 
   if (params.status && params.status !== "all") {
     query.status = params.status.toLowerCase();
@@ -115,11 +114,17 @@ export const getSupplierOrders = async (supplierId, params = {}) => {
 
   if (params.search) {
     const searchRegex = new RegExp(params.search, "i");
-    query.$or = [
-      { requestId: searchRegex },
-      { merchantName: searchRegex },
-      { productName: searchRegex },
+    query.$and = [
+      { supplierId },
+      {
+        $or: [
+          { requestId: searchRegex },
+          { merchantName: searchRegex },
+          { productName: searchRegex },
+        ],
+      },
     ];
+    delete query.supplierId;
   }
 
   const orders = await ProcurementOrder.find(query).sort({ createdAt: -1 });
@@ -152,23 +157,44 @@ export const getSupplierOrder = async (id, supplierId = null) => {
 };
 
 export const updateSupplierOrderStatus = async (id, supplierId, status) => {
+  // Find the order — allow finding by ID only (supplierId already validated by route auth)
   const order = await getSupplierOrder(id);
 
+  // Ensure the order actually belongs to this supplier (supplierId must match)
+  const orderSupplierId = order.supplierId?.toString();
+  const callerSupplierId = supplierId?.toString();
+  if (orderSupplierId && callerSupplierId && orderSupplierId !== callerSupplierId) {
+    const error = new Error("You are not authorized to update this order");
+    error.statusCode = 403;
+    throw error;
+  }
+
   const normalizedStatus = status.toLowerCase();
+
+  // If supplier is accepting and supplierId wasn't set, bind this supplier to the order
+  if (!order.supplierId && supplierId) {
+    order.supplierId = supplierId;
+  }
+
   order.status = normalizedStatus;
   await order.save();
 
   // Update or create linked logistics entry
   let logistics = await Logistics.findOne({ orderId: order.requestId });
   if (!logistics) {
-    logistics = await Logistics.create({
+    await Logistics.create({
       orderId: order.requestId,
       orderType: "procurement",
       merchantId: order.merchantId,
       merchantName: order.merchantName,
       supplierId: order.supplierId || supplierId,
       supplierName: order.supplierName || "Supplier",
-      status: normalizedStatus === "accepted" ? LOGISTICS_STATUS.ASSIGNED : (normalizedStatus === "preparing" ? LOGISTICS_STATUS.PREPARING : LOGISTICS_STATUS.IN_TRANSIT),
+      status:
+        normalizedStatus === "accepted"
+          ? LOGISTICS_STATUS.ASSIGNED
+          : normalizedStatus === "preparing"
+          ? LOGISTICS_STATUS.PREPARING
+          : LOGISTICS_STATUS.IN_TRANSIT,
     });
   } else {
     if (normalizedStatus === "preparing") {
